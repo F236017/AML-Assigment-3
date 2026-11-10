@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ECG Heartbeat Classifier</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════ RESET & BASE ═══════════════════ */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --navy:#0f3460;--dark:#16213e;--accent:#e94560;--teal:#1a7fa0;
+  --green:#2ecc71;--red:#e74c3c;--blue:#3498db;--orange:#f39c12;--purple:#9b59b6;
+  --bg:#f0f4f8;--card:#ffffff;--text:#1a1a2e;--muted:#64748b;--border:#e2e8f0;
+  --shadow:0 4px 24px rgba(15,52,96,.10);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ═══════════════════ HEADER ═══════════════════ */
+header{
+  background:linear-gradient(135deg,var(--dark) 0%,var(--navy) 60%,#1a4a7a 100%);
+  padding:0 2rem;position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 20px rgba(0,0,0,.35);
+}
+.header-inner{max-width:1300px;margin:0 auto;display:flex;align-items:center;gap:1.5rem;height:64px}
+.logo{font-size:1.6rem}
+.header-title{color:#fff;font-size:1.25rem;font-weight:700}
+.header-sub{color:#90cdf4;font-size:.8rem;margin-top:2px}
+nav{margin-left:auto;display:flex;gap:.25rem}
+nav button{
+  background:transparent;border:2px solid transparent;color:#90cdf4;
+  padding:.45rem 1.1rem;border-radius:8px;cursor:pointer;font-size:.9rem;
+  font-weight:600;transition:all .2s;
+}
+nav button:hover{background:rgba(255,255,255,.08);color:#fff}
+nav button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ═══════════════════ LAYOUT ═══════════════════ */
+main{max-width:1300px;margin:0 auto;padding:2rem 1.5rem}
+.page{display:none}.page.active{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+@media(max-width:900px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
+
+/* ═══════════════════ CARDS ═══════════════════ */
+.card{background:var(--card);border-radius:16px;padding:1.5rem;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card-title{font-size:1rem;font-weight:700;color:var(--navy);margin-bottom:1rem;
+  display:flex;align-items:center;gap:.5rem}
+.card-title .icon{font-size:1.1rem}
+
+/* ═══════════════════ METRIC CARDS ═══════════════════ */
+.metric-card{
+  background:var(--card);border-radius:14px;padding:1.2rem 1.4rem;
+  box-shadow:var(--shadow);border:1px solid var(--border);
+  border-left:5px solid var(--navy);position:relative;overflow:hidden;
+}
+.metric-card::before{
+  content:'';position:absolute;top:0;right:0;width:80px;height:80px;
+  border-radius:0 14px 0 80px;opacity:.06;background:currentColor;
+}
+.metric-label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.metric-value{font-size:2rem;font-weight:800;color:var(--text);margin-top:.2rem;line-height:1.1}
+.metric-sub{font-size:.8rem;color:var(--muted);margin-top:.3rem}
+
+/* ═══════════════════ HERO ═══════════════════ */
+.hero{
+  background:linear-gradient(135deg,var(--navy) 0%,var(--dark) 100%);
+  border-radius:20px;padding:2.5rem 2.5rem;margin-bottom:2rem;color:#fff;
+  display:flex;align-items:center;gap:2rem;box-shadow:var(--shadow);
+}
+.hero-text h1{font-size:2.1rem;line-height:1.2;margin-bottom:.7rem}
+.hero-text h1 span{color:#f6c90e}
+.hero-text p{color:#94c8e8;font-size:1rem;line-height:1.65;max-width:650px}
+.hero-badge{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  border-radius:12px;padding:1rem 1.5rem;min-width:200px;text-align:center;flex-shrink:0;
+}
+.hero-badge .num{font-size:2.6rem;font-weight:800;color:#f6c90e}
+.hero-badge .lbl{font-size:.82rem;color:#94c8e8;margin-top:.2rem}
+
+/* ═══════════════════ PREDICTOR ═══════════════════ */
+.class-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.class-tab{
+  padding:.4rem 1rem;border-radius:50px;border:2px solid;cursor:pointer;
+  font-size:.85rem;font-weight:700;transition:all .15s;background:transparent;
+}
+.class-tab.active{color:#fff!important;border-color:transparent!important}
+.beat-row{display:flex;align-items:center;gap:.7rem;padding:.5rem .8rem;
+  border-radius:10px;cursor:pointer;transition:background .15s;border:2px solid transparent}
+.beat-row:hover{background:#f8fafc}
+.beat-row.selected{background:#eff8ff;border-color:var(--blue)}
+.beat-index{font-size:.75rem;color:var(--muted);min-width:40px}
+.beat-mini{flex:1;height:28px}
+.beat-status{font-size:.8rem;font-weight:700}
+
+.pred-box{
+  border-radius:16px;padding:1.4rem 1.6rem;border:3px solid;
+  display:flex;align-items:center;gap:1rem;margin-bottom:1rem;
+}
+.pred-icon{font-size:2.2rem}
+.pred-label{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;opacity:.7}
+.pred-name{font-size:1.3rem;font-weight:800;line-height:1.2}
+.pred-desc{font-size:.85rem;opacity:.8;margin-top:.3rem}
+.correct-badge{
+  margin-left:auto;padding:.4rem .9rem;border-radius:50px;font-weight:700;font-size:.85rem;
+}
+
+.prob-row{display:flex;align-items:center;gap:.8rem;margin-bottom:.6rem}
+.prob-label{width:28px;font-weight:700;font-size:.9rem;text-align:center}
+.prob-bar-wrap{flex:1;background:#f1f5f9;border-radius:50px;height:22px;overflow:hidden}
+.prob-bar{height:100%;border-radius:50px;transition:width .4s cubic-bezier(.4,0,.2,1);
+  display:flex;align-items:center;justify-content:flex-end;padding-right:8px}
+.prob-pct{font-size:.78rem;font-weight:700;color:#fff;white-space:nowrap}
+.prob-num{width:52px;font-size:.85rem;font-weight:600;color:var(--muted);text-align:right}
+
+/* ═══════════════════ RANGE INPUT ═══════════════════ */
+input[type=range]{
+  -webkit-appearance:none;width:100%;height:6px;border-radius:3px;
+  background:linear-gradient(to right,var(--blue) 0%,var(--blue) var(--val,0%),#dde3ea var(--val,0%),#dde3ea 100%);
+  outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;background:var(--blue);
+  border-radius:50%;box-shadow:0 2px 8px rgba(52,152,219,.4);cursor:pointer;
+}
+.range-wrap{display:flex;align-items:center;gap:1rem}
+.range-val{
+  background:var(--navy);color:#fff;padding:.3rem .8rem;
+  border-radius:8px;font-weight:700;min-width:56px;text-align:center;
+}
+.btn{
+  padding:.55rem 1.3rem;border-radius:10px;border:none;cursor:pointer;
+  font-weight:700;font-size:.9rem;transition:all .2s;
+}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--teal)}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:hover{filter:brightness(1.1)}
+.btn-outline{background:transparent;border:2px solid var(--navy);color:var(--navy)}
+.btn-outline:hover{background:var(--navy);color:#fff}
+
+/* ═══════════════════ TABLE ═══════════════════ */
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{background:var(--navy);color:#fff;padding:.6rem .9rem;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
+td{padding:.6rem .9rem;border-bottom:1px solid var(--border)}
+tr:last-child td{border:none}
+tr:hover td{background:#f8fafc}
+.badge{display:inline-block;padding:.2rem .6rem;border-radius:50px;font-size:.78rem;font-weight:700}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.badge-gold{background:#fef3c7;color:#92400e}
+
+/* ═══════════════════ IMAGES ═══════════════════ */
+.result-img{width:100%;border-radius:12px;border:1px solid var(--border)}
+img{max-width:100%;border-radius:8px}
+
+/* ═══════════════════ SECTION HEADERS ═══════════════════ */
+.section-header{font-size:1.4rem;font-weight:800;color:var(--navy);margin:2rem 0 1rem;
+  display:flex;align-items:center;gap:.6rem}
+.section-header::after{content:'';flex:1;height:2px;background:linear-gradient(to right,var(--border),transparent)}
+
+/* ═══════════════════ CLASS COLOURS ═══════════════════ */
+.c0{color:#2ecc71}.c1{color:#e74c3c}.c2{color:#3498db}.c3{color:#f39c12}.c4{color:#9b59b6}
+.bg0{background:#2ecc71}.bg1{background:#e74c3c}.bg2{background:#3498db}.bg3{background:#f39c12}.bg4{background:#9b59b6}
+.bd0{border-color:#2ecc71}.bd1{border-color:#e74c3c}.bd2{border-color:#3498db}.bd3{border-color:#f39c12}.bd4{border-color:#9b59b6}
+.lt0{background:#d1fae5;color:#065f46}.lt1{background:#fee2e2;color:#991b1b}
+.lt2{background:#dbeafe;color:#1e40af}.lt3{background:#fef3c7;color:#92400e}.lt4{background:#ede9fe;color:#5b21b6}
+
+/* ═══════════════════ ABOUT PAGE ═══════════════════ */
+.arch-box{
+  background:#0f172a;color:#e2e8f0;border-radius:12px;padding:1.4rem 1.6rem;
+  font-family:'Courier New',monospace;font-size:.9rem;line-height:1.9;
+}
+.arch-box .kw{color:#7dd3fc}.arch-box .num{color:#f6c90e}
+.arch-box .com{color:#64748b}.arch-box .hi{color:#34d399}
+.check-row{display:flex;align-items:center;gap:.8rem;padding:.6rem 0;border-bottom:1px solid var(--border)}
+.check-row:last-child{border:none}
+.check-icon{font-size:1.1rem}
+.check-label{flex:1;font-size:.9rem}
+.check-val{font-weight:700;font-size:.88rem;color:var(--navy);font-family:monospace}
+
+/* ═══════════════════ UPLOAD ═══════════════════ */
+.upload-zone{
+  border:2.5px dashed var(--border);border-radius:14px;padding:2rem;
+  text-align:center;cursor:pointer;transition:all .2s;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--blue);background:#eff8ff}
+.upload-zone input{display:none}
+
+/* ═══════════════════ FOOTER ═══════════════════ */
+footer{
+  background:var(--dark);color:#94a3b8;text-align:center;
+  padding:1.2rem;font-size:.82rem;margin-top:3rem;
+}
+footer span{color:#7dd3fc;font-weight:600}
+
+/* ═══════════════════ LOADING OVERLAY ═══════════════════ */
+#loading{
+  position:fixed;inset:0;background:rgba(15,52,96,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;color:#fff;gap:1rem;font-size:1.1rem;
+}
+.spinner{
+  width:52px;height:52px;border:5px solid rgba(255,255,255,.2);
+  border-top-color:#f6c90e;border-radius:50%;animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div>Loading ECG Classifier…</div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-inner">
+    <span class="logo">❤️</span>
+    <div>
+      <div class="header-title">ECG Heartbeat Classifier</div>
+      <div class="header-sub">Neural network built from scratch · MIT-BIH Arrhythmia Database</div>
+    </div>
+    <nav>
+      <button class="active" onclick="showPage('predict',this)">🔬 Predict</button>
+      <button onclick="showPage('dashboard',this)">📊 Dashboard</button>
+      <button onclick="showPage('results',this)">📋 Results</button>
+      <button onclick="showPage('about',this)">ℹ️ About</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════════════ PAGE: PREDICT ═══════════════════ -->
+<div class="page active" id="page-predict">
+
+  <div class="hero">
+    <div class="hero-text">
+      <h1>Classify a <span>Heartbeat</span> in Real Time</h1>
+      <p>Pick any row from the 21,892-sample test set, or upload your own 187-point ECG signal.
+         The neural network (32,645 parameters, trained from scratch in PyTorch) will identify
+         the heartbeat type and show class probabilities.</p>
+    </div>
+    <div class="hero-badge">
+      <div class="num">97.80%</div>
+      <div class="lbl">Test Accuracy</div>
+      <div style="margin-top:.8rem" class="num" style="font-size:1.5rem">85.34%</div>
+      <div class="lbl">Balanced Accuracy</div>
+    </div>
+  </div>
+
+  <!-- Input mode toggle -->
+  <div style="display:flex;gap:.7rem;margin-bottom:1.5rem">
+    <button class="btn btn-primary" id="btn-testset" onclick="setMode('testset')">📋 Test-set Row</button>
+    <button class="btn btn-outline" id="btn-upload"  onclick="setMode('upload')">📁 Upload CSV</button>
+    <button class="btn btn-accent" onclick="randomRow()" style="margin-left:auto">🎲 Random</button>
+  </div>
+
+  <!-- Mode: test-set -->
+  <div id="mode-testset">
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="card-title"><span class="icon">🎛️</span>Select Test-set Row</div>
+      <div class="range-wrap">
+        <input type="range" id="row-slider" min="0" max="21891" value="0"
+               oninput="onSlider(this.value)">
+        <span class="range-val" id="row-display">0</span>
+        <input type="number" id="row-input" min="0" max="21891" value="0"
+               style="width:90px;padding:.4rem .6rem;border:2px solid var(--border);border-radius:8px;font-size:.9rem"
+               onchange="onRowInput(this.value)">
+        <button class="btn btn-primary" onclick="onRowInput(document.getElementById('row-input').value)">Go</button>
+      </div>
+      <!-- class filter -->
+      <div style="margin-top:1rem">
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem;font-weight:600">FILTER BY TRUE CLASS</div>
+        <div class="class-tabs" id="class-filter-tabs">
+          <button class="class-tab active" style="border-color:#64748b;color:#64748b" data-c="-1" onclick="filterClass(-1,this)">All</button>
+          <button class="class-tab c0 bd0" data-c="0" onclick="filterClass(0,this)">N — Normal</button>
+          <button class="class-tab c1 bd1" data-c="1" onclick="filterClass(1,this)">S — Supra.</button>
+          <button class="class-tab c2 bd2" data-c="2" onclick="filterClass(2,this)">V — Ventric.</button>
+          <button class="class-tab c3 bd3" data-c="3" onclick="filterClass(3,this)">F — Fusion</button>
+          <button class="class-tab c4 bd4" data-c="4" onclick="filterClass(4,this)">Q — Unknown</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode: upload -->
+  <div id="mode-upload" style="display:none;margin-bottom:1.5rem">
+    <div class="card">
+      <div class="card-title"><span class="icon">📁</span>Upload ECG Signal</div>
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handleDrop(event)">
+        <input type="file" id="csv-input" accept=".csv,.txt" onchange="handleFile(this.files[0])">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">📄</div>
+        <div style="font-weight:700;color:var(--navy)">Drop CSV here or click to browse</div>
+        <div style="color:var(--muted);font-size:.85rem;margin-top:.3rem">One row of exactly 187 comma-separated values (0–1 normalised)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prediction output -->
+  <div class="grid2">
+    <!-- Left: waveform -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📈</span>ECG Waveform</div>
+      <canvas id="beat-chart" height="160"></canvas>
+      <div id="waveform-info" style="margin-top:.8rem;font-size:.82rem;color:var(--muted)"></div>
+    </div>
+
+    <!-- Right: prediction -->
+    <div>
+      <div class="card" style="margin-bottom:1.2rem">
+        <div class="card-title"><span class="icon">🧠</span>Prediction</div>
+        <div id="pred-box" class="pred-box bd0" style="background:#d1fae5">
+          <span id="pred-icon" class="pred-icon">🟢</span>
+          <div>
+            <div class="pred-label">Predicted Class</div>
+            <div id="pred-name" class="pred-name">—</div>
+            <div id="pred-desc" class="pred-desc"></div>
+          </div>
+          <div id="correct-badge" class="correct-badge"></div>
+        </div>
+        <div id="true-class-row" style="display:none;margin-bottom:.8rem;font-size:.9rem">
+          <strong>True class:</strong> <span id="true-class-name"></span>
+        </div>
+        <div class="card-title" style="margin-top:.5rem"><span class="icon">📊</span>Class Probabilities</div>
+        <div id="prob-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top-3 table -->
+  <div class="card" style="margin-top:1.2rem">
+    <div class="card-title"><span class="icon">🏆</span>Top Predictions</div>
+    <table id="top3-table">
+      <tr><th>Rank</th><th>Class</th><th>Probability</th><th>Confidence</th></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE: DASHBOARD ═══════════════════ -->
+<div class="page" id="page-dashboard">
+  <div class="section-header">📊 Model Performance Dashboard</div>
+
+  <div class="grid4" style="margin-bottom:1.5rem">
+    <div class="metric-card" style="border-left-color:#2ecc71">
+      <div class="metric-label">Test Accuracy</div>
+      <div class="metric-value">97.80%</div>
+      <div class="metric-sub">21,892 test samples</div>
+    </div>
+    <div class="metric-card" style="border-left-color:#3498db">
+      <div class="metric-label">Balanced Accuracy</div>
+      <div class="metric-value">85.34%</div>
+      <div class="metric-sub">Average per-class accuracy</div>
+    </div>
+    <div class="metric-card" style="border-left-color:#e74c3c">
+      <div class="metric-label">Always-N Baseline</div>
+      <div class="metric-value">82.76%</div>
+      <div class="metric-sub">Predict only majority class</div>
+    </div>
+    <div class="metric-card" style="border-left-color:#9b59b6">
+      <div class="metric-label">Parameters</div>
+      <div class="metric-value">32,645</div>
+      <div class="metric-sub">187→128→64→5</div>
+    </div>
+  </div>
+
+  <!-- Per-class accuracy chart -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="icon">🎯</span>Per-class Accuracy</div>
+      <canvas id="pca-chart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">🗂️</span>Confusion Matrix</div>
+      <img id="img-cm" class="result-img" alt="Confusion matrix"/>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-title"><span class="icon">📉</span>Learning-Rate Comparison</div>
+      <img id="img-lr" class="result-img" alt="LR comparison"/>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">📈</span>Training &amp; Val Loss (α=0.5)</div>
+      <img id="img-loss" class="result-img" alt="Loss curves"/>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-title"><span class="icon">💓</span>Example Beats — One Per Class</div>
+    <img id="img-beats" class="result-img" alt="Example beats"/>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE: RESULTS ═══════════════════ -->
+<div class="page" id="page-results">
+  <div class="section-header">📋 All Result Tables</div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="icon">📁</span>Table 1 — Data Split</div>
+      <table>
+        <tr><th>Split</th><th>Rows</th></tr>
+        <tr><td>Train</td><td><strong>78,799</strong></td></tr>
+        <tr><td>Validation</td><td><strong>8,755</strong></td></tr>
+        <tr><td>Test</td><td><strong>21,892</strong></td></tr>
+        <tr><td>Min signal value</td><td><strong>0.000000</strong></td></tr>
+        <tr><td>Max signal value</td><td><strong>1.000000</strong></td></tr>
+      </table>
+      <div style="margin-top:1rem"></div>
+      <table>
+        <tr><th>Class</th><th>Train</th><th>Test</th></tr>
+        <tr><td><span class="badge lt0">N Normal</span></td><td>72,471</td><td>18,118</td></tr>
+        <tr><td><span class="badge lt1">S Supra.</span></td><td>2,223</td><td>556</td></tr>
+        <tr><td><span class="badge lt2">V Ventric.</span></td><td>5,788</td><td>1,448</td></tr>
+        <tr><td><span class="badge lt3">F Fusion</span></td><td>641</td><td>162</td></tr>
+        <tr><td><span class="badge lt4">Q Unknown</span></td><td>6,431</td><td>1,608</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🧠</span>Table 2 — Network &amp; Training</div>
+      <table>
+        <tr><th>Item</th><th>Value</th></tr>
+        <tr><td>Architecture</td><td><code>187→128→64→5</code></td></tr>
+        <tr><td>Parameters</td><td><strong>32,645</strong> <span class="badge badge-green">✓</span></td></tr>
+        <tr><td>W1: 128×187+128</td><td>24,064</td></tr>
+        <tr><td>W2: 64×128+64</td><td>8,256</td></tr>
+        <tr><td>W3: 5×64+5</td><td>325</td></tr>
+        <tr><td>Initial loss</td><td>1.7417</td></tr>
+        <tr><td>Grad check W3</td><td><code>1.49e-08</code> <span class="badge badge-green">✓</span></td></tr>
+        <tr><td>Grad check b3</td><td><code>5.96e-08</code> <span class="badge badge-green">✓</span></td></tr>
+        <tr><td>Chosen α</td><td><strong>0.5</strong></td></tr>
+        <tr><td>Best epoch</td><td><strong>21</strong></td></tr>
+        <tr><td>Train loss @ best</td><td>0.0548</td></tr>
+        <tr><td>Val loss @ best</td><td>0.0747</td></tr>
+        <tr><td>Train acc @ best</td><td>98.34%</td></tr>
+        <tr><td>Val acc @ best</td><td>97.94%</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:1.5rem">
+    <div class="card">
+      <div class="card-title"><span class="icon">📐</span>Table 3 — Learning-Rate Choice</div>
+      <table>
+        <tr><th>α</th><th>Lowest Val Loss</th><th>Val Accuracy</th></tr>
+        <tr><td>0.01</td><td>0.1615</td><td>95.77%</td></tr>
+        <tr><td>0.10</td><td>0.0873</td><td>97.60%</td></tr>
+        <tr style="background:#f0fdf4"><td><strong>0.50 ✓</strong></td><td><strong>0.0747</strong></td><td><strong>97.94%</strong></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🧪</span>Table 4 — Test Results</div>
+      <table>
+        <tr><th>Class</th><th>Per-class Acc.</th><th>Correct / Total</th></tr>
+        <tr><td><span class="badge lt0">N</span></td><td><strong>99.54%</strong></td><td>18,034 / 18,118</td></tr>
+        <tr><td><span class="badge lt1">S</span></td><td><strong>68.53%</strong></td><td>381 / 556</td></tr>
+        <tr><td><span class="badge lt2">V</span></td><td><strong>91.37%</strong></td><td>1,323 / 1,448</td></tr>
+        <tr><td><span class="badge lt3">F</span></td><td><strong>70.37%</strong></td><td>114 / 162</td></tr>
+        <tr><td><span class="badge lt4">Q</span></td><td><strong>96.89%</strong></td><td>1,558 / 1,608</td></tr>
+        <tr style="background:#eff8ff"><td colspan="3"><strong>Test accuracy: 97.80%</strong></td></tr>
+        <tr style="background:#eff8ff"><td colspan="3"><strong>Balanced accuracy: 85.34%</strong></td></tr>
+        <tr style="background:#fef3f2"><td colspan="3">Always-"N" baseline: 82.76%</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-title"><span class="icon">🗂️</span>Confusion Matrix (5 × 5)</div>
+    <div style="overflow-x:auto">
+    <table id="cm-table" style="min-width:400px">
+      <tr><th></th><th>Pred N</th><th>Pred S</th><th>Pred V</th><th>Pred F</th><th>Pred Q</th><th>Row sum</th></tr>
+      <tr><td><strong>True N</strong></td><td style="background:#d1fae5;font-weight:700">18,034</td><td>40</td><td>23</td><td>8</td><td>13</td><td><em>18,118</em></td></tr>
+      <tr><td><strong>True S</strong></td><td style="color:#991b1b">162</td><td style="background:#d1fae5;font-weight:700">381</td><td>13</td><td>0</td><td>0</td><td><em>556</em></td></tr>
+      <tr><td><strong>True V</strong></td><td style="color:#991b1b">86</td><td>6</td><td style="background:#d1fae5;font-weight:700">1,323</td><td>26</td><td>7</td><td><em>1,448</em></td></tr>
+      <tr><td><strong>True F</strong></td><td style="color:#991b1b">36</td><td>0</td><td>12</td><td style="background:#d1fae5;font-weight:700">114</td><td>0</td><td><em>162</em></td></tr>
+      <tr><td><strong>True Q</strong></td><td style="color:#991b1b">39</td><td>5</td><td>5</td><td>1</td><td style="background:#d1fae5;font-weight:700">1,558</td><td><em>1,608</em></td></tr>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGE: ABOUT ═══════════════════ -->
+<div class="page" id="page-about">
+  <div class="section-header">ℹ️ How It Works</div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title"><span class="icon">🏗️</span>Network Architecture</div>
+      <div class="arch-box">
+<span class="com"># ECGNet — built entirely from nn.Parameter</span>
+<span class="kw">class</span> ECGNet(nn.Module):
+  W1: (<span class="num">128</span>, <span class="num">187</span>)  b1: (<span class="num">128</span>,)   <span class="com"># He init</span>
+       ↓  <span class="hi">ReLU</span>  = torch.clamp(z, min=<span class="num">0</span>)
+  W2: (<span class="num">64</span>,  <span class="num">128</span>)  b2: (<span class="num">64</span>,)
+       ↓  <span class="hi">ReLU</span>
+  W3: (<span class="num">5</span>,   <span class="num">64</span>)   b3: (<span class="num">5</span>,)
+       ↓  logits → <span class="hi">softmax</span> inside loss
+
+<span class="com"># Loss (numerically stable)</span>
+L = <span class="num">-z_y</span> + logsumexp(z)
+
+<span class="com"># Update rule (no torch.optim!)</span>
+g  = ∂J/∂P + λP  <span class="com"># λ=1e-4 (weights only)</span>
+v  = β·v + (1-β)·g   <span class="com"># β=0.9 momentum</span>
+P  = P - α·v          <span class="com"># α=0.5 chosen</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="icon">🔢</span>Parameter Count</div>
+      <table>
+        <tr><th>Layer</th><th>Shape</th><th>Params</th></tr>
+        <tr><td>W1</td><td>128 × 187</td><td>23,936</td></tr>
+        <tr><td>b1</td><td>128</td><td>128</td></tr>
+        <tr><td>W2</td><td>64 × 128</td><td>8,192</td></tr>
+        <tr><td>b2</td><td>64</td><td>64</td></tr>
+        <tr><td>W3</td><td>5 × 64</td><td>320</td></tr>
+        <tr><td>b3</td><td>5</td><td>5</td></tr>
+        <tr style="background:#eff8ff"><td colspan="2"><strong>Total</strong></td><td><strong>32,645</strong></td></tr>
+      </table>
+      <div style="margin-top:1.2rem">
+        <div class="card-title"><span class="icon">✅</span>Correctness Checks</div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <span class="check-label">Trainable parameters</span>
+          <span class="check-val">32,645</span>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <span class="check-label">Gradient check ∂J/∂W3</span>
+          <span class="check-val">1.49e-08</span>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <span class="check-label">Gradient check ∂J/∂b3</span>
+          <span class="check-val">5.96e-08</span>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <span class="check-label">Confusion matrix total</span>
+          <span class="check-val">21,892</span>
+        </div>
+        <div class="check-row">
+          <span class="check-icon">✅</span>
+          <span class="check-label">Label column excluded</span>
+          <span class="check-val">187 inputs</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-title"><span class="icon">🎓</span>Analysis — Task 6 Answers</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+      <div>
+        <p style="font-weight:700;color:var(--navy);margin-bottom:.4rem">6.1 — Always-"N" Accuracy</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151">An always-N model scores <strong>82.76%</strong>. Our model scores <strong>97.80%</strong>. Despite both seeming "high", the always-N model is clinically useless — it never detects a single arrhythmia. Balanced accuracy (85.34% vs 82.76%) reveals the real gap.</p>
+
+        <p style="font-weight:700;color:var(--navy);margin:.9rem 0 .4rem">6.2 — Hardest Class</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151"><strong>S</strong> has the lowest per-class accuracy (68.53%), mostly confused with <strong>N</strong>. Supraventricular beats are biologically similar to normal beats — only subtle P-wave timing differences separate them, which a small network struggles to distinguish.</p>
+
+        <p style="font-weight:700;color:var(--navy);margin:.9rem 0 .4rem">6.3 — Overfitting?</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151">A small but stable gap exists between train (98.34%) and val (97.94%) accuracy. This is <strong>mild overfitting</strong> — not severe. Loss plateaus at epoch 21, confirming an appropriate model size.</p>
+      </div>
+      <div>
+        <p style="font-weight:700;color:var(--navy);margin-bottom:.4rem">6.4 — He Init &amp; Why Not Zero</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151">Zero init → all neurons identical → gradient symmetry never breaks → training fails. <strong>He init</strong> uses std = √(2/n) because ReLU zeroes half inputs on average (halving variance); the factor of 2 restores it, keeping activations well-scaled.</p>
+
+        <p style="font-weight:700;color:var(--navy);margin:.9rem 0 .4rem">6.5 — Momentum &amp; Weight Decay</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151"><strong>Momentum</strong>: opposing gradients partially cancel in the velocity → update slows in noisy directions, stays fast in consistent directions. <strong>Weight decay</strong>: a weight with zero gradient still decays P ← P(1−αλ), penalising large unused weights.</p>
+
+        <p style="font-weight:700;color:var(--navy);margin:.9rem 0 .4rem">6.6 — Helping Class F (641 samples)</p>
+        <p style="font-size:.9rem;line-height:1.65;color:#374151"><strong>Class-weighted loss</strong>: weight each sample by w_j = N/(C·n_j). An F-class miss contributes ~113× more than an N-class miss, forcing the network to focus on rare classes during training.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-title"><span class="icon">📜</span>Allowed / Not-Allowed Libraries</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div style="background:#f0fdf4;border-radius:10px;padding:1rem;border:1px solid #bbf7d0">
+        <p style="font-weight:700;color:#065f46;margin-bottom:.5rem">✅ Allowed</p>
+        <code style="font-size:.85rem;color:#065f46">torch tensors, loss.backward()</code><br>
+        <code style="font-size:.85rem;color:#065f46">nn.Module, nn.Parameter, nn.ParameterList</code><br>
+        <code style="font-size:.85rem;color:#065f46">torch.logsumexp, torch.softmax (reporting)</code><br>
+        <code style="font-size:.85rem;color:#065f46">numpy, pandas, matplotlib, Streamlit</code>
+      </div>
+      <div style="background:#fef2f2;border-radius:10px;padding:1rem;border:1px solid #fecaca">
+        <p style="font-weight:700;color:#991b1b;margin-bottom:.5rem">❌ Not Allowed</p>
+        <code style="font-size:.85rem;color:#991b1b">nn.Linear, nn.Sequential, nn.ReLU</code><br>
+        <code style="font-size:.85rem;color:#991b1b">torch.optim (any optimiser)</code><br>
+        <code style="font-size:.85rem;color:#991b1b">nn.CrossEntropyLoss, F.cross_entropy</code><br>
+        <code style="font-size:.85rem;color:#991b1b">nn.init, scikit-learn, Keras, TensorFlow</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <strong>ECG Heartbeat Classifier</strong> · Assignment 3 · Machine Learning · Fall 2026 ·
+  <span>Hammad &amp; Faizan</span> · Dataset: MIT-BIH Arrhythmia Database (Kaggle)
+</footer>
+
+<!-- Load data bundle -->
+<script src="web_data.js"></script>
+
+<script>
+// ═══════════════════ CONFIG ═══════════════════
+const CLASS_NAMES  = ["N — Normal","S — Supraventricular Ectopic","V — Ventricular Ectopic","F — Fusion","Q — Unknown / Paced"];
+const CLASS_SHORT  = ["N","S","V","F","Q"];
+const CLASS_COLORS = ["#2ecc71","#e74c3c","#3498db","#f39c12","#9b59b6"];
+const CLASS_DESC   = [
+  "Normal sinus beat. Clear R-peak with smooth P and T waves.",
+  "Originates above the ventricles. Similar to N but with altered P-wave timing.",
+  "Originates in the ventricles. Wide, abnormal shape; no clear P-wave.",
+  "Mixture of normal and ventricular morphology — a blended beat.",
+  "Pacemaker or unclassified beat. Narrow sharp spikes.",
+];
+const CLASS_LT = ["lt0","lt1","lt2","lt3","lt4"];
+const RANK_EMOJI = ["🥇","🥈","🥉"];
+
+// ═══════════════════ CHARTS ═══════════════════
+let beatChart = null, pcaChart = null;
+let currentMode = "testset";
+let currentSignal = null;
+let activeClassFilter = -1;
+
+// ═══════════════════ PAGE NAV ═══════════════════
+function showPage(id, btn) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.getElementById("page-"+id).classList.add("active");
+  btn.classList.add("active");
+}
+
+function setMode(m) {
+  currentMode = m;
+  document.getElementById("mode-testset").style.display = m==="testset"?"block":"none";
+  document.getElementById("mode-upload").style.display  = m==="upload"?"block":"none";
+  document.getElementById("btn-testset").className = "btn " + (m==="testset"?"btn-primary":"btn-outline");
+  document.getElementById("btn-upload").className  = "btn " + (m==="upload"?"btn-primary":"btn-outline");
+}
+
+// ═══════════════════ SLIDER / INPUT ═══════════════════
+function onSlider(val) {
+  val = parseInt(val);
+  document.getElementById("row-display").textContent = val;
+  document.getElementById("row-input").value = val;
+  const pct = (val/21891)*100;
+  document.getElementById("row-slider").style.setProperty("--val", pct+"%");
+  renderRow(val);
+}
+
+function onRowInput(val) {
+  val = Math.max(0, Math.min(21891, parseInt(val)||0));
+  document.getElementById("row-slider").value = val;
+  document.getElementById("row-display").textContent = val;
+  document.getElementById("row-input").value = val;
+  const pct = (val/21891)*100;
+  document.getElementById("row-slider").style.setProperty("--val", pct+"%");
+  renderRow(val);
+}
+
+function randomRow() {
+  const max = activeClassFilter === -1 ? 21891 :
+    WEB_DATA.predictions.filter(r=>r.t===activeClassFilter).length - 1;
+  let row;
+  if (activeClassFilter === -1) {
+    row = Math.floor(Math.random()*21892);
+  } else {
+    // find test-row indices that match filter
+    const idx = [];
+    WEB_DATA.predictions.forEach((r,i)=>{ if(r.t===activeClassFilter) idx.push(i); });
+    row = idx[Math.floor(Math.random()*idx.length)];
+  }
+  onRowInput(row);
+}
+
+function filterClass(c, btn) {
+  activeClassFilter = c;
+  document.querySelectorAll(".class-tab").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+}
+
+// ═══════════════════ FIND SIGNAL ═══════════════════
+function getSignal(rowId) {
+  const trueClass = WEB_DATA.predictions[rowId].t;
+  const bucket = WEB_DATA.class_signals[trueClass];
+  const idx = bucket.row_ids.indexOf(rowId);
+  if (idx !== -1) return bucket.signals[idx];
+  // Not in sample: use first signal of that class
+  return bucket.signals[0];
+}
+
+// ═══════════════════ RENDER ROW ═══════════════════
+function renderRow(rowId) {
+  const rec = WEB_DATA.predictions[rowId];
+  const signal = getSignal(rowId);
+  currentSignal = signal;
+
+  const pred = rec.p;
+  const probs = rec.pr;
+  const trueC = rec.t;
+  const color = CLASS_COLORS[pred];
+
+  // --- waveform ---
+  const times = Array.from({length:187}, (_,i)=>+(i*1000/125).toFixed(1));
+  if (beatChart) beatChart.destroy();
+  beatChart = new Chart(document.getElementById("beat-chart"), {
+    type:"line",
+    data:{
+      labels: times,
+      datasets:[{
+        data: signal,
+        borderColor: color,
+        backgroundColor: color+"22",
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2.5,
+      }]
+    },
+    options:{
+      animation:{duration:300},
+      responsive:true,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{title:{display:true,text:"Time (ms)",font:{size:11}},
+           ticks:{maxTicksLimit:10}},
+        y:{title:{display:true,text:"Amplitude",font:{size:11}},min:0,max:1.05}
+      }
+    }
+  });
+  document.getElementById("waveform-info").textContent =
+    `Test row #${rowId}  ·  True class: ${CLASS_NAMES[trueC]}  ·  187 samples @ 125 Hz`;
+
+  // --- prediction box ---
+  const box = document.getElementById("pred-box");
+  box.className = "pred-box bd"+pred;
+  box.style.background = color+"18";
+  document.getElementById("pred-icon").textContent = pred===0?"🟢":"🔴";
+  document.getElementById("pred-name").textContent = CLASS_NAMES[pred];
+  document.getElementById("pred-desc").textContent = CLASS_DESC[pred];
+
+  const badge = document.getElementById("correct-badge");
+  const correct = pred === trueC;
+  badge.textContent = correct ? "✅ Correct" : "❌ Wrong";
+  badge.style.background = correct ? "#d1fae5" : "#fee2e2";
+  badge.style.color = correct ? "#065f46" : "#991b1b";
+
+  const tRow = document.getElementById("true-class-row");
+  tRow.style.display = "flex";
+  document.getElementById("true-class-name").innerHTML =
+    `<span class="badge ${CLASS_LT[trueC]}">${CLASS_NAMES[trueC]}</span>`;
+
+  // --- probability bars ---
+  const bars = document.getElementById("prob-bars");
+  bars.innerHTML = "";
+  probs.forEach((p, i) => {
+    const pct = (p*100).toFixed(1);
+    bars.innerHTML += `
+      <div class="prob-row">
+        <span class="prob-label c${i}">${CLASS_SHORT[i]}</span>
+        <div class="prob-bar-wrap">
+          <div class="prob-bar bg${i}" style="width:${Math.max(p*100,0.5)}%">
+            ${p > 0.08 ? `<span class="prob-pct">${pct}%</span>` : ""}
+          </div>
+        </div>
+        <span class="prob-num">${pct}%</span>
+      </div>`;
+  });
+
+  // --- top-3 ---
+  const sorted = [...probs.map((v,i)=>({v,i}))].sort((a,b)=>b.v-a.v);
+  const t3 = document.getElementById("top3-table");
+  t3.innerHTML = "<tr><th>Rank</th><th>Class</th><th>Probability</th><th>Bar</th></tr>";
+  sorted.slice(0,3).forEach((s,ri) => {
+    const pct = (s.v*100).toFixed(2);
+    t3.innerHTML += `
+      <tr>
+        <td>${RANK_EMOJI[ri]}</td>
+        <td><span class="badge ${CLASS_LT[s.i]}">${CLASS_SHORT[s.i]}</span> ${CLASS_NAMES[s.i].split("—")[1]||""}</td>
+        <td><strong>${pct}%</strong></td>
+        <td><div style="background:#f1f5f9;border-radius:4px;height:10px">
+          <div style="background:${CLASS_COLORS[s.i]};width:${pct}%;height:10px;border-radius:4px;transition:width .3s"></div>
+        </div></td>
+      </tr>`;
+  });
+}
+
+// ═══════════════════ UPLOAD ═══════════════════
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById("upload-zone").classList.remove("drag");
+  handleFile(e.dataTransfer.files[0]);
+}
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const vals = e.target.result.split(/[\n,]+/).map(Number).filter(v=>!isNaN(v)).slice(0,187);
+    if (vals.length < 187) { alert("Need 187 values, got "+vals.length); return; }
+    renderUploadedSignal(vals);
+  };
+  reader.readAsText(file);
+}
+function renderUploadedSignal(signal) {
+  currentSignal = signal;
+  if (beatChart) beatChart.destroy();
+  const times = Array.from({length:187}, (_,i)=>+(i*1000/125).toFixed(1));
+  beatChart = new Chart(document.getElementById("beat-chart"), {
+    type:"line",
+    data:{
+      labels:times,
+      datasets:[{data:signal,borderColor:"#3498db",backgroundColor:"#3498db22",
+                 fill:true,tension:0.3,pointRadius:0,borderWidth:2.5}]
+    },
+    options:{animation:{duration:300},responsive:true,
+      plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:"Time (ms)"}},y:{title:{display:true,text:"Amplitude"},min:0,max:1.05}}}
+  });
+  document.getElementById("waveform-info").textContent = "Uploaded signal · 187 samples @ 125 Hz";
+  // Note: no model in browser — show placeholder
+  document.getElementById("pred-name").textContent = "Run Python model to get prediction";
+  document.getElementById("pred-desc").textContent = "Open src/test_model.py for predictions on custom inputs.";
+  document.getElementById("prob-bars").innerHTML = "";
+  document.getElementById("true-class-row").style.display = "none";
+  document.getElementById("correct-badge").textContent = "";
+}
+
+// ═══════════════════ DASHBOARD CHARTS ═══════════════════
+function buildDashboard() {
+  // Per-class accuracy bar chart
+  if (pcaChart) pcaChart.destroy();
+  pcaChart = new Chart(document.getElementById("pca-chart"),{
+    type:"bar",
+    data:{
+      labels:CLASS_NAMES.map(n=>n.split("—")[0].trim()),
+      datasets:[
+        {label:"Per-class Accuracy (%)",
+         data:[99.54,68.53,91.37,70.37,96.89],
+         backgroundColor:CLASS_COLORS.map(c=>c+"cc"),
+         borderColor:CLASS_COLORS,
+         borderWidth:2,borderRadius:8},
+        {label:"Balanced Acc (85.34%)",type:"line",
+         data:[85.34,85.34,85.34,85.34,85.34],
+         borderColor:"#0f3460",borderWidth:2,borderDash:[6,4],
+         pointRadius:0,fill:false},
+        {label:"Overall Acc (97.80%)",type:"line",
+         data:[97.80,97.80,97.80,97.80,97.80],
+         borderColor:"#e94560",borderWidth:2,borderDash:[4,4],
+         pointRadius:0,fill:false},
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{position:"top",labels:{font:{size:11}}}},
+      scales:{y:{min:0,max:110,
+        title:{display:true,text:"Accuracy (%)"}}}
+    }
+  });
+
+  // Set images from base64
+  if (WEB_DATA.images) {
+    const set = (id,key)=>{ const el=document.getElementById(id); if(el&&WEB_DATA.images[key]) el.src=WEB_DATA.images[key]; };
+    set("img-cm",    "confusion_matrix");
+    set("img-lr",    "lr_comparison");
+    set("img-loss",  "loss_curves");
+    set("img-beats", "example_beats");
+  }
+}
+
+// ═══════════════════ INIT ═══════════════════
+window.addEventListener("load", () => {
+  // Hide loading
+  document.getElementById("loading").style.display = "none";
+  // Initial render
+  renderRow(0);
+  buildDashboard();
+  // Slider styling
+  document.getElementById("row-slider").style.setProperty("--val","0%");
+});
+</script>
+</body>
+</html>

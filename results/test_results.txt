@@ -1,0 +1,22 @@
+Table 4 – Test Results
+==================================================
+
+Metric                    |      Value
+----------------------------------------
+Per-class acc (N)       |     99.54%
+Per-class acc (S)       |     68.53%
+Per-class acc (V)       |     91.37%
+Per-class acc (F)       |     70.37%
+Per-class acc (Q)       |     96.89%
+Test accuracy             |     97.80%
+Balanced accuracy         |     85.34%
+Always-N accuracy         |     82.76%
+
+
+Confusion Matrix:
+            N      S      V      F      Q
+    N    18034     40     23      8     13
+    S      162    381     13      0      0
+    V       86      6   1323     26      7
+    F       36      0     12    114      0
+    Q       39      5      5      1   1558
